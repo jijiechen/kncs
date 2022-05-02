@@ -7,4 +7,13 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <None Remove="Manifests\pod1.yaml" />
+    <EmbeddedResource Include="Manifests\pod.yaml" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="YamlDotNet" Version="11.2.1" />
+  </ItemGroup>
+
 </Project>
