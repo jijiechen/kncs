@@ -9,6 +9,7 @@
   
   <ItemGroup>
     <PackageReference Include="KubernetesClient" Version="7.0.15" />
+    <PackageReference Include="Nito.AsyncEx" Version="5.1.2" />
   </ItemGroup>
 
 </Project>
