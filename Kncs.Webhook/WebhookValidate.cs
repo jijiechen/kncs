@@ -4,12 +4,11 @@ using k8s.Models;
 using Kncs.Webhook;
 using JsonSerializerOptions = System.Text.Json.JsonSerializerOptions;
 
-
 partial class Program
 {
     private static string[]? _blockedRepos = null;
 
-    static AdmissionReview Validate(AdmissionReview review)
+    static AdmissionReview CheckImage(AdmissionReview review)
     {
         if (_blockedRepos == null)
         {
