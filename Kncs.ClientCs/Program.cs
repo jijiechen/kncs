@@ -13,7 +13,8 @@ public class Program
         var kubeClient = new Kubernetes(k8sConfig);
 
         // 找出现有的 Pod
-        var pods = await kubeClient.ListNamespacedPodAsync("default", null, null, null, "app=test");
+        var pods = await kubeClient.ListNamespacedPodAsync("default", 
+            null, null, null, "app=test");
         foreach (var pod in pods.Items)
         {
             Console.WriteLine($"现有的 test Pod: {pod.Metadata.Name}");
@@ -33,7 +34,8 @@ public class Program
         
         // watch 新的 Pod
         var existingPods = pods.Items.Select(p => p.Metadata.Name).ToHashSet();
-        var listTask = await kubeClient.ListNamespacedPodWithHttpMessagesAsync("default", watch: true).ConfigureAwait(false);
+        var listTask = 
+            await kubeClient.ListNamespacedPodWithHttpMessagesAsync("default", watch: true).ConfigureAwait(false);
         var connectionClosed = new AsyncManualResetEvent();
         
         listTask.Watch<V1Pod, V1PodList>(
