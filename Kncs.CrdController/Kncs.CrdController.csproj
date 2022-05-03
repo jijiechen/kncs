@@ -6,4 +6,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
+  <ItemGroup>
+    <PackageReference Include="KubernetesClient" Version="7.2.19" />
+    <PackageReference Include="KubernetesClient.Models" Version="7.2.19" />
+  </ItemGroup>
+
 </Project>
