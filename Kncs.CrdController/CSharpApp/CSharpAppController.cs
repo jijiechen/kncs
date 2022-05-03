@@ -424,7 +424,7 @@ public class CSharpAppController: Controller<CSharpApp>
             while (stringBuilder.Length < RandomNameLength)
             {
                 var letter = NameGeneratorRandom.Next(97, 122);
-                stringBuilder.Append(letter);
+                stringBuilder.Append((char)letter);
             }
 
             return stringBuilder.ToString();

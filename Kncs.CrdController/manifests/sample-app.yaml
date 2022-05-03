@@ -1,0 +1,15 @@
+
+apiVersion: k8s.jijiechen.com/v1alpha1
+kind: CSharpApp
+metadata:
+  name: my-demo
+  namespace: default
+spec:
+  code: |
+    Console.WriteLine("Hey Hey")
+  replicas: 2
+  service:
+    port: 80
+    type: LoadBalancer
+
+
