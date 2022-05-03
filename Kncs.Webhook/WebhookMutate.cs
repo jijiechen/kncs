@@ -12,7 +12,7 @@ partial class Program
     static AdmissionReview InjectDotnetHelper(AdmissionReview reviewRequest)
     {
         var allowedResponse = CreateInjectResponse(reviewRequest, true);
-        if (reviewRequest.Request.Kind.Kind != "Pod")
+        if (reviewRequest.Request.Kind.Kind != "Pod" || reviewRequest.Request.Operation != "CREATE")
         {
             return allowedResponse;
         }
