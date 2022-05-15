@@ -14,21 +14,22 @@ webhooks:
         path: /validate
         port: 443
     failurePolicy: Fail
-    matchPolicy: Exact
-    name: image-validator
+    name: image-validator.kncs.io
     namespaceSelector: {}
     objectSelector: {}
     rules:
       - apiGroups:
-          - pods
+          - ""
         apiVersions:
           - v1
         operations:
           - CREATE
           - UPDATE
           - DELETE
+        resources:
+          - pods
         scope: '*'
-    sideEffects: Unknown
+    sideEffects: None
     timeoutSeconds: 30
 
 ---
@@ -49,19 +50,20 @@ webhooks:
         path: /mutate
         port: 443
     failurePolicy: Fail
-    matchPolicy: Exact
-    name: dotnet-helper-injector
+    name: dotnet-helper-injector.kncs.io
     namespaceSelector: {}
     objectSelector: {}
     rules:
       - apiGroups:
-          - pods
+          - ""
         apiVersions:
           - v1
         operations:
           - CREATE
           - UPDATE
           - DELETE
+        resources:
+          - pods
         scope: '*'
     sideEffects: None
     timeoutSeconds: 30

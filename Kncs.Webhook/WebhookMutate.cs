@@ -36,10 +36,13 @@ partial class Program
             ImagePullPolicy = "IfNotPresent"
         };
 
+        var podName = string.IsNullOrEmpty(reviewRequest.Request.Name) ? pod.Metadata.GenerateName + "?" : reviewRequest.Request.Name;
+        var fullPodName = $"{reviewRequest.Request.Namespace}/{podName}";
+        Console.WriteLine($"正在向此 Pod 中注入 dotnet helper：{fullPodName}");
         var patch = new
         {
             op = "add",
-            path = "/spec/containers",
+            path = "/spec/containers/-",
             value = container
         };
         var patches = new[] {patch};
@@ -59,8 +62,13 @@ partial class Program
         return pod.Spec.Containers.Any(c => c.Name == "dotnet-helper");
     }
 
-    private static bool DisabledByAnnotation(IDictionary<string, string> annotations)
+    private static bool DisabledByAnnotation(IDictionary<string, string>? annotations)
     {
+        if (annotations == null)
+        {
+            return false;
+        }
+        
         var falseValues = new[] { "no", "false", "0" };
             
         return annotations.TryGetValue(InjectAnnotationKeySetting, out var annotation) &&

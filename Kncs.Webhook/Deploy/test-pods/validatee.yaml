@@ -1,0 +1,19 @@
+﻿apiVersion: v1
+kind: Pod
+metadata:
+  annotations:
+    k8s.jijiechen.com/inject-dotnet-helper: 'false'
+  labels:
+    app: test
+  name: webhook-tester-validating
+  namespace: default
+spec:
+  containers:
+    - args:
+        - infinity
+      command:
+        - sleep
+      image: abcd.com/centos:7
+      imagePullPolicy: IfNotPresent
+      name: tester
+
