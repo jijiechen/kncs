@@ -10,4 +10,9 @@
     <PackageReference Include="KubernetesClient.Models" Version="7.2.19" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Remove="AdminReviewModels\admission.swagger.json" />
+    <None Include="AdminReviewModels\admission.swagger.json" />
+  </ItemGroup>
+
 </Project>
