@@ -1,5 +1,5 @@
 ﻿# cd ..
-# docker build -t jijiechen-docker.pkg.coding.net/sharpcr/kncs/webhook:$(date +"%Y%m%d")-$RANDOM -f ./Deploy/Dockerfile .
+# docker build -t jijiechen-docker.pkg.coding.net/sharpcr/kncs/webhook:$(date +"%Y%m%d")-$RANDOM -f ./manifests/Dockerfile .
 FROM mcr.microsoft.com/dotnet/sdk:7.0.100-preview.4-alpine3.15-amd64 as Builder
 WORKDIR /src/
 # copy csproj only to reuse nuget cache when csproj is not changing
