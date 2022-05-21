@@ -8,7 +8,7 @@ partial class Program
 {
 
     const string InjectAnnotationKeySetting = "k8s.jijiechen.com/inject-dotnet-helper";
-    
+
     static AdmissionReview InjectDotnetHelper(AdmissionReview reviewRequest)
     {
         var allowedResponse = CreateInjectResponse(reviewRequest, true);
@@ -18,16 +18,18 @@ partial class Program
         }
 
         var podJson = reviewRequest.Request.Object.GetRawText();
-        var pod = JsonSerializer.Deserialize<V1Pod>(podJson, new JsonSerializerOptions() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase});
+        var pod = JsonSerializer.Deserialize<V1Pod>(podJson,
+            new JsonSerializerOptions() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
         if (DisabledByAnnotation(pod!.Metadata.Annotations))
         {
             return allowedResponse;
         }
+
         if (AlreadyInjected(pod))
         {
             return allowedResponse;
         }
-        
+
         var container = new V1Container("dotnet-helper")
         {
             Args = new[] { "infinity" },
@@ -36,7 +38,9 @@ partial class Program
             ImagePullPolicy = "IfNotPresent"
         };
 
-        var podName = string.IsNullOrEmpty(reviewRequest.Request.Name) ? pod.Metadata.GenerateName + "?" : reviewRequest.Request.Name;
+        var podName = string.IsNullOrEmpty(reviewRequest.Request.Name)
+            ? pod.Metadata.GenerateName + "?"
+            : reviewRequest.Request.Name;
         var fullPodName = $"{reviewRequest.Request.Namespace}/{podName}";
         Console.WriteLine($"正在向此 Pod 中注入 dotnet helper：{fullPodName}");
         var patch = new
@@ -45,7 +49,7 @@ partial class Program
             path = "/spec/containers/-",
             value = container
         };
-        var patches = new[] {patch};
+        var patches = new[] { patch };
         var patchResponse = new AdmissionResponse()
         {
             Allowed = true,

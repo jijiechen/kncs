@@ -6,7 +6,7 @@ metadata:
   namespace: default
 spec:
   code: |
-    Console.WriteLine("Hey Hey")
+    Console.WriteLine("Hello world from CSharp App")
   replicas: 2
   service:
     port: 80

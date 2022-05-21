@@ -1,6 +1,6 @@
-﻿using Kncs.CrdController.Crd;
+﻿using ContainerSolutions.OperatorSDK;
 
-namespace Kncs.CrdController.CSharpApp;
+namespace Kncs.CrdController.Crd;
 
 public class CSharpAppSpec
 {
@@ -52,7 +52,34 @@ public class LastApplyConfiguration
     public CSharpAppService? Service { get; set; } 
 }
 
-public class CSharpApp: CustomResource<CSharpAppSpec, CSharpAppStatus>
+public class CSharpApp:  BaseCRD
 {
+    public const string SchemaGroup = "k8s.jijiechen.com";
+    public const string SchemaKindSingular = "csharpapp";
+    public const string SchemaKindPlural = "csharpapps";
+    public const string SchemaVersion = "v1alpha1";
     
+    
+    public CSharpApp() : base(SchemaGroup, SchemaVersion, SchemaKindPlural, SchemaKindSingular) { }
+
+    public CSharpAppSpec? Spec { get; set; }
+
+    public override bool Equals(object? obj)
+    {
+        if (obj == null)
+            return false;
+
+        return ToString().Equals(obj.ToString());
+    }
+
+    public override int GetHashCode()
+    {
+        return ToString().GetHashCode();
+    }
+
+    public override string ToString()
+    {
+        return Spec?.ToString() ?? string.Empty;
+    }
+
 }
