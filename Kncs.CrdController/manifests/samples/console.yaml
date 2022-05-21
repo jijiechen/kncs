@@ -2,14 +2,11 @@
 apiVersion: k8s.jijiechen.com/v1alpha1
 kind: CSharpApp
 metadata:
-  name: my-demo
+  name: hello-console
   namespace: default
 spec:
   code: |
-    Console.WriteLine("Hello world from CSharp App")
+    Console.WriteLine("Hello world from CSharp App");
+    Thread.Sleep(Timeout.Infinite);
   replicas: 2
-  service:
-    port: 80
-    type: LoadBalancer
-
 

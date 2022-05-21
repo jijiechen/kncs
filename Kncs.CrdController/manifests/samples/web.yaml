@@ -1,0 +1,15 @@
+
+apiVersion: k8s.jijiechen.com/v1alpha1
+kind: CSharpApp
+metadata:
+  name: hello-web
+  namespace: default
+spec:
+  code: |
+    var app = WebApplication.Create(args);
+    app.MapGet("/", () => "Hello World!");
+    app.Run("http://*:80");
+  replicas: 2
+  service:
+    type: LoadBalancer
+    port: 80

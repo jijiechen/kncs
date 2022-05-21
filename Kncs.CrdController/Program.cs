@@ -8,23 +8,20 @@ public class Program
 {
     static async Task Main(string[] args)
     {
-        
         try
         {
-            
             string k8sNamespace = "default";
             if (args.Length > 1)
                 k8sNamespace = args[0];
 
             Controller<CSharpApp>.ConfigLogger();
+            
+            Log.Info($"=== STARTING CSharpApp for {k8sNamespace} ===");
 
             var controller = new Controller<CSharpApp>(new CSharpApp(), new CSharpAppOperator(k8sNamespace), k8sNamespace);
             Task reconciliation = controller.SatrtAsync();
 
-            Log.Info($"=== STARTED ===");
-
             reconciliation.ConfigureAwait(false).GetAwaiter().GetResult();
-
         }
         catch (Exception ex)
         {

@@ -9,7 +9,7 @@ namespace Kncs.CrdController.Crd;
 public class CSharpAppOperator : IOperationHandler<CSharpApp>
 {
     private readonly string _watchedNamespace;
-    private const string CSharpAppRunnerImage = "jijiechen/csharp-app-runner:2022050301";
+    private const string CSharpAppRunnerImage = "jijiechen/csharp-app-runner:202205211630";
     private const string LastApplyConfigAnnoKey = "last-applied-configuration";
 
     public CSharpAppOperator(string watchedNamespace)
@@ -401,7 +401,7 @@ public class CSharpAppOperator : IOperationHandler<CSharpApp>
 
         var container = new V1Container("csa")
         {
-            Image = CSharpAppRunnerImage,
+            Image = GetRunnerImage(),
             ImagePullPolicy = "IfNotPresent",
             VolumeMounts = new List<V1VolumeMount>(),
         };
@@ -558,6 +558,12 @@ public class CSharpAppOperator : IOperationHandler<CSharpApp>
         }
 
         return stringBuilder.ToString();
+    }    
+    
+    static string GetRunnerImage()
+    {
+        var customizedRunner = Environment.GetEnvironmentVariable("RUNNER_IMAGE");
+        return !string.IsNullOrEmpty(customizedRunner) ? customizedRunner : CSharpAppRunnerImage;
     }
     
     #endregion
