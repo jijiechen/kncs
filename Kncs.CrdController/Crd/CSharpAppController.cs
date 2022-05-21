@@ -3,21 +3,22 @@ using System.Text.Json;
 using ContainerSolutions.OperatorSDK;
 using k8s;
 using k8s.Models;
+using Microsoft.Rest;
 
 namespace Kncs.CrdController.Crd;
 
-public class CSharpAppController : IOperationHandler<Crd.CSharpApp>
+public class CSharpAppController : IOperationHandler<CSharpApp>
 {
     private const string CSharpAppRunnerImage = "jijiechen/csharp-app-runner:2022050301";
     private const string LastApplyConfigAnnoKey = "last-applied-configuration";
 
 
-    public async Task OnBookmarked(Kubernetes k8s, Crd.CSharpApp crd)
+    public async Task OnBookmarked(Kubernetes k8s, CSharpApp crd)
     {
         
     }
 
-    public async Task OnError(Kubernetes k8s, Crd.CSharpApp crd)
+    public async Task OnError(Kubernetes k8s, CSharpApp crd)
     {
         Console.Error.WriteLine("Some error happens...");
     }
@@ -26,77 +27,93 @@ public class CSharpAppController : IOperationHandler<Crd.CSharpApp>
     {
         
     }
-    
-    public async Task OnAdded(Kubernetes kubeClient, Crd.CSharpApp item)
+
+    public async Task OnAdded(Kubernetes kubeClient, CSharpApp item)
     {
+        if (item.Metadata == null || item.Spec == null)
+        {
+            return;
+        }
+
+        var lastApplied = item.Metadata?.Annotations?[LastApplyConfigAnnoKey];
+        if (lastApplied != null)
+        {
+            await OnUpdated(kubeClient, item);
+            return;
+        }
+
+        var dummyLastCfg = new LastApplyConfiguration();
         var ownerRef = BuildOwnerReference(item);
 
-        var configmap = CreateConfigMap(kubeClient, item, ownerRef);
-        var podCreated = 0;
-        while (podCreated++ < item.Spec.Replicas)
-        {
-            CreatePod(kubeClient, item, ownerRef, configmap);
-        }
+        var configmap = EnsureSourceCodeConfigMap(kubeClient, item, ownerRef);
 
-        if (item.Spec.Service != null)
-        {
-            CreateService(kubeClient, item, ownerRef);
-        }
+        EnsurePods(kubeClient, item, dummyLastCfg, ownerRef, configmap);
 
-        // todo: create watcher!
+        EnsureService(kubeClient, item, dummyLastCfg, ownerRef);
+
         var newlyAppliedConfig = new LastApplyConfiguration
         {
-            CodeHash = item.Spec.Code!.GetHashCode(),
-            Replicas = item.Spec.Replicas,
+            CodeHash = GetCodeHash(item),
+            Replicas = item.Spec!.Replicas,
             Service = item.Spec.Service
         };
-        var appPatches = new List<object>()
+        var lastApplyCfgAnnoVal = JsonSerializer.Serialize(newlyAppliedConfig);
+
+        var appPatches = new List<object>();
+        if (item.Metadata!.Annotations == null)
         {
-            new
+            appPatches.Add(new
+            {
+                op = "add",
+                path = $"/metadata/annotations",
+                value = new Dictionary<string, object>
+                {
+                    { LastApplyConfigAnnoKey, lastApplyCfgAnnoVal }
+                }
+            });
+
+        }
+        else
+        {
+            appPatches.Add(new
             {
                 op = "add",
                 path = $"/metadata/annotations/{LastApplyConfigAnnoKey}",
-                value = JsonSerializer.Serialize(newlyAppliedConfig)
-            }
-        };
+                value = lastApplyCfgAnnoVal
+            });
+        }
 
-        kubeClient.PatchNamespacedCustomObject(new V1Patch { Content = appPatches },
-            Crd.CSharpApp.SchemaGroup,
-            Crd.CSharpApp.SchemaVersion,
+        kubeClient.PatchNamespacedCustomObject(
+            new V1Patch(JsonSerializer.Serialize(appPatches), V1Patch.PatchType.JsonPatch),
+            CSharpApp.SchemaGroup,
+            CSharpApp.SchemaVersion,
             item.Metadata.NamespaceProperty,
-            Crd.CSharpApp.SchemaKindPlural,
+            CSharpApp.SchemaKindPlural,
             item.Metadata.Name);
     }
 
-    private static V1OwnerReference BuildOwnerReference(Crd.CSharpApp item)
-    {
-        var ownerRef = new V1OwnerReference()
-        {
-            Kind = item.Kind,
-            ApiVersion = item.ApiVersion,
-            Name = item.Metadata.Name,
-            Uid = item.Metadata.Uid
-        };
-        return ownerRef;
-    }
 
-    
-    public async Task OnDeleted(Kubernetes kubeClient, Crd.CSharpApp item)
+    public async Task OnDeleted(Kubernetes kubeClient, CSharpApp item)
     {
         CleanupService(kubeClient, item);
 
-        CleanupPods(kubeClient, item);
+        CleanupPods(kubeClient, item, null /* delete all pods */);
 
         CleanupConfigMap(kubeClient, item);
     }
 
-    
-    public async Task OnUpdated(Kubernetes kubeClient, Crd.CSharpApp item)
+
+    public async Task OnUpdated(Kubernetes kubeClient, CSharpApp item)
     {
+        if (item.Metadata == null || item.Spec == null)
+        {
+            return;
+        }
+        
         var ownerRef = BuildOwnerReference(item);
 
         LastApplyConfiguration? lastAppliedConfig = null;
-        var lastApplied = item.Metadata.Annotations[LastApplyConfigAnnoKey];
+        var lastApplied = item.Metadata.Annotations?[LastApplyConfigAnnoKey];
         if (lastApplied != null)
         {
             lastAppliedConfig = JsonSerializer.Deserialize<LastApplyConfiguration>(lastApplied);
@@ -109,59 +126,96 @@ public class CSharpAppController : IOperationHandler<Crd.CSharpApp>
             return;
         }
 
-        var srcConfigMap = FindConfigMap(kubeClient, item)?.Metadata.Name;
-        var newlyCreatedCm = srcConfigMap == null;
-        if (newlyCreatedCm)
+        var codeHash = GetCodeHash(item);
+        if (lastAppliedConfig.CodeHash == codeHash)
         {
-            srcConfigMap = CreateConfigMap(kubeClient, item, ownerRef);
+            return;
         }
+        
+        var codeConfigMap = EnsureSourceCodeConfigMap(kubeClient, item, ownerRef);
+        
+        EnsurePods(kubeClient, item, lastAppliedConfig, ownerRef, codeConfigMap);
 
-        var codeHash = item.Spec.Code!.GetHashCode();
-        if (!newlyCreatedCm && codeHash != lastAppliedConfig.CodeHash)
+        EnsureService(kubeClient, item, lastAppliedConfig, ownerRef);
+
+        var newlyAppliedConfig = new LastApplyConfiguration
         {
-            var patches = new List<object>
+            CodeHash = codeHash,
+            Replicas = item.Spec?.Replicas ?? 0,
+            Service = item.Spec?.Service
+        };
+        var appPatches = new List<object>()
+        {
+            new
             {
-                new
-                {
-                    op = "replace",
-                    path = "/data/Program.cs",
-                    value = item.Spec.Code
-                }
-            };
+                op = "replace",
+                path = $"/metadata/annotations/{LastApplyConfigAnnoKey}",
+                value = JsonSerializer.Serialize(newlyAppliedConfig)
+            }
+        };
 
-            var patch = new V1Patch { Content = patches };
-            kubeClient.PatchNamespacedConfigMap(patch, srcConfigMap, item.Metadata.NamespaceProperty);
+        kubeClient.PatchNamespacedCustomObject(new V1Patch(JsonSerializer.Serialize(appPatches), V1Patch.PatchType.JsonPatch),
+            CSharpApp.SchemaGroup,
+            CSharpApp.SchemaVersion,
+            item.Metadata.NamespaceProperty,
+            CSharpApp.SchemaKindPlural,
+            item.Metadata.Name);
+    }
 
-            CleanupPods(kubeClient, item);
+    private static V1OwnerReference BuildOwnerReference(CSharpApp item)
+    {
+        var ownerRef = new V1OwnerReference()
+        {
+            Kind = item.Kind,
+            ApiVersion = item.ApiVersion,
+            Name = item.Metadata.Name,
+            Uid = item.Metadata.Uid
+        };
+        return ownerRef;
+    }
+
+    private void EnsurePods(Kubernetes kubeClient, CSharpApp item, LastApplyConfiguration lastAppliedConfig,
+        V1OwnerReference ownerRef, string codeConfigMap)
+    {
+        var codeHash = GetCodeHash(item);
+        if (lastAppliedConfig.CodeHash != null && lastAppliedConfig.CodeHash != codeHash)
+        {
+            // 源代码已改变，清除旧的 Pod，等待下面的流程来创建
+            CleanupPods(kubeClient, item, lastAppliedConfig.CodeHash);
             lastAppliedConfig.Replicas = 0;
         }
 
-        var offset = item.Spec.Replicas - lastAppliedConfig.Replicas;
+        var offset = item.Spec!.Replicas - lastAppliedConfig.Replicas;
         if (offset > 0)
         {
             var podCreated = 0;
             do
             {
-                CreatePod(kubeClient, item, ownerRef, srcConfigMap!);
+                CreatePod(kubeClient, item, codeHash!, ownerRef, codeConfigMap!);
             } while (++podCreated < offset);
         }
         else if (offset < 0)
         {
             offset = -1 * offset;
-            var pods = FindPods(kubeClient, item).ToArray();
+            var pods = FindPods(kubeClient, item, codeHash).ToArray();
             var podDeleted = 0;
             do
             {
                 kubeClient.DeleteNamespacedPod(pods[podDeleted].Metadata.Name, item.Metadata.NamespaceProperty);
             } while (++podDeleted < offset);
         }
+    }
 
-        if (item.Spec.Service == null && lastAppliedConfig.Service != null)
+    private void EnsureService(Kubernetes kubeClient, CSharpApp item, LastApplyConfiguration lastAppliedConfig,
+        V1OwnerReference ownerRef)
+    {
+        if (item.Spec!.Service == null && lastAppliedConfig.Service != null)
         {
             CleanupService(kubeClient, item);
         }
 
-        if (item.Spec.Service != null && lastAppliedConfig.Service == null)
+        var existingSvc = FindService(kubeClient, item);
+        if (item.Spec.Service != null && lastAppliedConfig.Service == null && existingSvc == null)
         {
             CreateService(kubeClient, item, ownerRef);
         }
@@ -169,15 +223,14 @@ public class CSharpAppController : IOperationHandler<Crd.CSharpApp>
         if (item.Spec.Service != null && lastAppliedConfig.Service != null
                                       && !item.Spec.Service.Equals(lastAppliedConfig.Service))
         {
-            var svc = FindService(kubeClient, item);
-            if (svc == null)
+            if (existingSvc == null)
             {
                 CreateService(kubeClient, item, ownerRef);
             }
             else
             {
                 var patches = new List<object>();
-                if (svc.Spec.Type != item.Spec.Service.Type)
+                if (existingSvc.Spec.Type != item.Spec.Service.Type)
                 {
                     patches.Add(new
                     {
@@ -187,8 +240,8 @@ public class CSharpAppController : IOperationHandler<Crd.CSharpApp>
                     });
                 }
 
-                svc.Spec.Type = item.Spec.Service.Type;
-                var svcPort = svc.Spec.Ports.FirstOrDefault(p => p.Port == item.Spec.Service.Port);
+                existingSvc.Spec.Type = item.Spec.Service.Type;
+                var svcPort = existingSvc.Spec.Ports.FirstOrDefault(p => p.Port == item.Spec.Service.Port);
                 if (svcPort == null)
                 {
                     var ports = new List<V1ServicePort>()
@@ -203,39 +256,69 @@ public class CSharpAppController : IOperationHandler<Crd.CSharpApp>
                     });
                 }
 
-                kubeClient.PatchNamespacedService(new V1Patch { Content = patches }, svc.Metadata.Name,
-                    svc.Metadata.NamespaceProperty);
+                kubeClient.PatchNamespacedService(new V1Patch(JsonSerializer.Serialize(patches), V1Patch.PatchType.JsonPatch), existingSvc.Metadata.Name,
+                    existingSvc.Metadata.NamespaceProperty);
             }
         }
-
-        var newlyAppliedConfig = new LastApplyConfiguration
-        {
-            CodeHash = item.Spec.Code.GetHashCode(),
-            Replicas = item.Spec.Replicas,
-            Service = item.Spec.Service
-        };
-        var appPatches = new List<object>()
-        {
-            new
-            {
-                op = "replace",
-                path = $"/metadata/annotations/{LastApplyConfigAnnoKey}",
-                value = JsonSerializer.Serialize(newlyAppliedConfig)
-            }
-        };
-
-        kubeClient.PatchNamespacedCustomObject(new V1Patch { Content = appPatches },
-            Crd.CSharpApp.SchemaGroup,
-            Crd.CSharpApp.SchemaVersion,
-            item.Metadata.NamespaceProperty,
-            Crd.CSharpApp.SchemaKindPlural,
-            item.Metadata.Name);
     }
 
-    private string CreateConfigMap(Kubernetes kubeClient, Crd.CSharpApp item, V1OwnerReference ownerRef)
+    private string EnsureSourceCodeConfigMap(Kubernetes kubeClient, CSharpApp item, V1OwnerReference ownerRef)
     {
         if (item == null) throw new ArgumentNullException(nameof(item));
-        if (item == null) throw new ArgumentNullException(nameof(item));
+
+        var desiredSourceCode = (item.Spec?.Code ?? "").Trim();
+        var existingConfigMap = FindConfigMap(kubeClient, item);
+        if (existingConfigMap != null)
+        {
+            var hasData = existingConfigMap.Data != null;
+            var patches = new List<object>();
+            if (!hasData)
+            {
+                patches.Add(new
+                {
+                    op = "add",
+                    path = "/data",
+                    value = new Dictionary<string, string>
+                    {
+                        { "Program.cs", desiredSourceCode }
+                    }
+                });
+            }
+            else if (!existingConfigMap.Data!.ContainsKey("Program.cs"))
+            {
+                patches.Add(
+                    new
+                    {
+                        op = "add",
+                        path = "/data/Program.cs",
+                        value = desiredSourceCode
+                    });
+            }
+            else
+            {
+                var source = existingConfigMap.Data["Program.cs"];
+                if (source == null || source.Trim() != desiredSourceCode)
+                {
+                    patches.Add(
+                        new
+                        {
+                            op = "replace",
+                            path = "/data/Program.cs",
+                            value = desiredSourceCode
+                        });
+                }
+            }
+
+            if (patches.Count > 0)
+            {
+                var patch = new V1Patch(JsonSerializer.Serialize(patches), V1Patch.PatchType.JsonPatch);
+                kubeClient.PatchNamespacedConfigMap(patch, existingConfigMap.Metadata.Name, item.Metadata.NamespaceProperty);
+            }
+
+            return existingConfigMap.Metadata.Name;
+        }
+        
+        
         var cmName = $"csapp-src-{item.Metadata.Name}";
         var configMap = new V1ConfigMap
         {
@@ -243,7 +326,11 @@ public class CSharpAppController : IOperationHandler<Crd.CSharpApp>
             Kind = "ConfigMap",
             Data = new Dictionary<string, string>
             {
-                { "Program.cs", item.Spec.Code ?? "" }
+                { "Program.cs", desiredSourceCode }
+            },
+            Metadata = new V1ObjectMeta()
+            {
+                Labels = new Dictionary<string, string>()
             }
         };
         configMap.AddOwnerReference(ownerRef);
@@ -254,14 +341,15 @@ public class CSharpAppController : IOperationHandler<Crd.CSharpApp>
         return cmName;
     }
 
-    void CreatePod(Kubernetes kubeClient, Crd.CSharpApp item, V1OwnerReference ownerRef, string configmap)
+    void CreatePod(Kubernetes kubeClient, CSharpApp item, string codeHash, V1OwnerReference ownerRef, string configmap)
     {
-        var podName = $"csapp-{item.Metadata.Name}-{GenerateRandomName()}";
+        var shortHash = codeHash.Substring(0, 6);
+        var podName = $"csa-{item.Metadata.Name}-{shortHash}-{GenerateRandomName()}";
         var pod = new V1Pod
         {
             ApiVersion = "v1",
             Kind = "Pod",
-            Spec = new V1PodSpec() { Containers = new List<V1Container>() },
+            Spec = new V1PodSpec() { Containers = new List<V1Container>(), Volumes = new List<V1Volume>() },
             Metadata = new V1ObjectMeta()
             {
                 Labels = new Dictionary<string, string>()
@@ -270,6 +358,7 @@ public class CSharpAppController : IOperationHandler<Crd.CSharpApp>
 
         pod.Metadata.Name = podName;
         pod.Metadata.Labels["csharpapp"] = item.Metadata.Name;
+        pod.Metadata.Labels["codehash"] = codeHash;
         pod.AddOwnerReference(ownerRef);
 
         var cmVolume = new V1Volume("cs-source");
@@ -279,7 +368,7 @@ public class CSharpAppController : IOperationHandler<Crd.CSharpApp>
         };
         pod.Spec.Volumes.Add(cmVolume);
 
-        var container = new V1Container("tester")
+        var container = new V1Container("csa")
         {
             Image = CSharpAppRunnerImage,
             ImagePullPolicy = "IfNotPresent",
@@ -291,7 +380,7 @@ public class CSharpAppController : IOperationHandler<Crd.CSharpApp>
         kubeClient.CreateNamespacedPod(pod, item.Metadata.NamespaceProperty);
     }
 
-    private void CreateService(Kubernetes kubeClient, Crd.CSharpApp item, V1OwnerReference ownerRef)
+    private void CreateService(Kubernetes kubeClient, CSharpApp item, V1OwnerReference ownerRef)
     {
         var svc = new V1Service()
         {
@@ -324,7 +413,7 @@ public class CSharpAppController : IOperationHandler<Crd.CSharpApp>
         kubeClient.CreateNamespacedService(svc, item.Metadata.NamespaceProperty);
     }
 
-    private void CleanupService(Kubernetes kubeClient, Crd.CSharpApp item)
+    private void CleanupService(Kubernetes kubeClient, CSharpApp item)
     {
         var svc = FindService(kubeClient, item);
         if (svc != null)
@@ -333,9 +422,9 @@ public class CSharpAppController : IOperationHandler<Crd.CSharpApp>
         }
     }
 
-    private void CleanupPods(Kubernetes kubeClient, Crd.CSharpApp item)
+    private void CleanupPods(Kubernetes kubeClient, CSharpApp item, string lastCodeHash)
     {
-        var pods = FindPods(kubeClient, item).ToArray();
+        var pods = FindPods(kubeClient, item, lastCodeHash).ToArray();
 
         foreach (var pod in pods)
         {
@@ -343,7 +432,7 @@ public class CSharpAppController : IOperationHandler<Crd.CSharpApp>
         }
     }
 
-    private void CleanupConfigMap(Kubernetes kubeClient, Crd.CSharpApp item)
+    private void CleanupConfigMap(Kubernetes kubeClient, CSharpApp item)
     {
         var targetConfigMap = FindConfigMap(kubeClient, item);
 
@@ -353,7 +442,7 @@ public class CSharpAppController : IOperationHandler<Crd.CSharpApp>
         }
     }
 
-    private V1ConfigMap? FindConfigMap(Kubernetes kubeClient, Crd.CSharpApp item)
+    private V1ConfigMap? FindConfigMap(Kubernetes kubeClient, CSharpApp item)
     {
         var labelSelector = $"csharpapp={item.Metadata.Name}";
         var configMaps = kubeClient.ListNamespacedConfigMap(item.Metadata.NamespaceProperty,
@@ -364,7 +453,7 @@ public class CSharpAppController : IOperationHandler<Crd.CSharpApp>
         return targetConfigMap;
     }
 
-    private V1Service? FindService(Kubernetes kubeClient, Crd.CSharpApp item)
+    private V1Service? FindService(Kubernetes kubeClient, CSharpApp item)
     {
         var labelSelector = $"csharpapp={item.Metadata.Name}";
         var svcList = kubeClient.ListNamespacedService(item.Metadata.NamespaceProperty,
@@ -375,9 +464,14 @@ public class CSharpAppController : IOperationHandler<Crd.CSharpApp>
         return targetSvc;
     }
 
-    private IEnumerable<V1Pod> FindPods(Kubernetes kubeClient, Crd.CSharpApp item)
+    private IEnumerable<V1Pod> FindPods(Kubernetes kubeClient, CSharpApp item, string? codeHash)
     {
         var labelSelector = $"csharpapp={item.Metadata.Name}";
+        if (codeHash != null)
+        {
+            labelSelector += $",codehash={codeHash}";
+        }
+        
         var pods = kubeClient.ListNamespacedPod(item.Metadata.NamespaceProperty,
             false, null, null, labelSelector);
 
@@ -388,6 +482,37 @@ public class CSharpAppController : IOperationHandler<Crd.CSharpApp>
     static readonly Random NameGeneratorRandom = new();
     private const byte RandomNameLength = 4;
 
+    static string? GetCodeHash(CSharpApp item)
+    {
+        var code = item.Spec?.Code;
+        if (string.IsNullOrEmpty(code))
+        {
+            return null;
+        }
+
+        var hashCode = GetDeterministicHashCode(code);
+        return hashCode.ToString("D").Replace('-', 'u');
+    }
+    
+    static int GetDeterministicHashCode(string str)
+    {
+        unchecked
+        {
+            int hash1 = (5381 << 16) + 5381;
+            int hash2 = hash1;
+
+            for (int i = 0; i < str.Length; i += 2)
+            {
+                hash1 = ((hash1 << 5) + hash1) ^ str[i];
+                if (i == str.Length - 1)
+                    break;
+                hash2 = ((hash2 << 5) + hash2) ^ str[i + 1];
+            }
+
+            return hash1 + (hash2 * 1566083941);
+        }
+    }
+    
     static string GenerateRandomName()
     {
         var stringBuilder = new StringBuilder();

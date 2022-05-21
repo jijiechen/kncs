@@ -47,7 +47,7 @@ public class CSharpAppService
 public class LastApplyConfiguration
 {
     // ReSharper disable once InconsistentNaming
-    public int CodeHash { get; set; }
+    public string? CodeHash { get; set; }
     public byte Replicas { get; set; }
     public CSharpAppService? Service { get; set; } 
 }

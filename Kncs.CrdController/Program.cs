@@ -1,4 +1,5 @@
 using ContainerSolutions.OperatorSDK;
+using k8s;
 using Kncs.CrdController.Crd;
 using NLog.Fluent;
 
@@ -11,6 +12,7 @@ public class Program
         
         try
         {
+            
             string k8sNamespace = "default";
             if (args.Length > 1)
                 k8sNamespace = args[0];
