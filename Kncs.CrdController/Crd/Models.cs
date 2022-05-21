@@ -1,22 +1,26 @@
-﻿using ContainerSolutions.OperatorSDK;
+﻿using Kncs.CrdController.OperatorSDK;
+using k8s;
+using k8s.Models;
+using Newtonsoft.Json;
 
 namespace Kncs.CrdController.Crd;
 
 public class CSharpAppSpec
 {
+    [JsonProperty(PropertyName="code")]
     public string? Code { get; set; }
+    
+    [JsonProperty(PropertyName="replicas")]
     public byte Replicas { get; set; }
+    [JsonProperty(PropertyName="service")]
     public CSharpAppService? Service { get; set; }
-}
-
-public class CSharpAppStatus
-{
-    public bool Created { get; set; }
 }
 
 public class CSharpAppService
 {
+    [JsonProperty(PropertyName="port")]   
     public short Port { get; set; }
+    [JsonProperty(PropertyName="type")]
     public string? Type { get; set; }
 
     public override bool Equals(object? obj)
@@ -62,6 +66,7 @@ public class CSharpApp:  BaseCRD
     
     public CSharpApp() : base(SchemaGroup, SchemaVersion, SchemaKindPlural, SchemaKindSingular) { }
 
+    [JsonProperty(PropertyName="spec")]
     public CSharpAppSpec? Spec { get; set; }
 
     public override bool Equals(object? obj)
@@ -83,3 +88,18 @@ public class CSharpApp:  BaseCRD
     }
 
 }
+
+  public class CSharpAppList :  IKubernetesObject<V1ListMeta>, IItems<CSharpApp>
+  {
+    [JsonProperty(PropertyName="apiVersion")]
+    public string ApiVersion { get; set; }
+
+    [JsonProperty(PropertyName="items")]
+    public IList<CSharpApp> Items { get; set; }
+
+    [JsonProperty(PropertyName="kind")]
+    public string Kind { get; set; }
+
+    [JsonProperty(PropertyName="metadata")]
+    public V1ListMeta Metadata { get; set; }
+  }

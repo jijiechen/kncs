@@ -1,5 +1,4 @@
-using ContainerSolutions.OperatorSDK;
-using k8s;
+using Kncs.CrdController.OperatorSDK;
 using Kncs.CrdController.Crd;
 using NLog.Fluent;
 
@@ -19,7 +18,7 @@ public class Program
 
             Controller<CSharpApp>.ConfigLogger();
 
-            var controller = new Controller<CSharpApp>(new CSharpApp(), new CSharpAppController(), k8sNamespace);
+            var controller = new Controller<CSharpApp>(new CSharpApp(), new CSharpAppOperator(k8sNamespace), k8sNamespace);
             Task reconciliation = controller.SatrtAsync();
 
             Log.Info($"=== STARTED ===");
