@@ -1,0 +1,17 @@
+﻿apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    app: test
+  name: test-pod
+spec:
+  serviceAccountName: pod-operator
+  containers:
+    - args:
+        - infinity
+      command:
+        - sleep
+      image: centos:7
+      imagePullPolicy: IfNotPresent
+      name: tester
+

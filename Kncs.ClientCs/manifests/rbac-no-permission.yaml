@@ -1,0 +1,10 @@
+﻿---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: pod-operator-role
+  namespace: default
+rules:
+  - apiGroups: [ "" ]
+    resources: [ "pods", "pods/exec" ]
+    verbs: [ "create" ]

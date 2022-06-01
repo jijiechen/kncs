@@ -1,0 +1,31 @@
+﻿kind: ServiceAccount
+apiVersion: v1
+metadata:
+  name: pod-operator
+  namespace: default
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: pod-operator-role
+  namespace: default
+rules:
+  - apiGroups: [ "" ]
+    resources: [ "pods", "pods/exec" ]
+    verbs: [ "*" ]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: pod-operator-role
+  namespace: default
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: pod-operator-role
+subjects:
+  - kind: ServiceAccount
+    name: pod-operator
+    namespace: default
