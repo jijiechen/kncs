@@ -30,7 +30,7 @@ public class CSharpAppOperator : IOperationHandler<CSharpApp>
         var responseText = await response.Response.Content.ReadAsStringAsync();
         var appListObj = JsonConvert.DeserializeObject<CSharpAppList>(responseText);
         
-        foreach (var item in appListObj!.Items)
+        foreach (var item in appListObj!.Items!)
         {
             await OnUpdated(k8s, item);
         }
@@ -101,19 +101,21 @@ public class CSharpAppOperator : IOperationHandler<CSharpApp>
     }
 
 
-    public async Task OnDeleted(Kubernetes kubeClient, CSharpApp item)
+    public Task OnDeleted(Kubernetes kubeClient, CSharpApp item)
     {
         CleanupService(kubeClient, item);
 
         CleanupPods(kubeClient, item, null /* delete all pods */);
 
         CleanupConfigMap(kubeClient, item);
+        
+        return Task.CompletedTask;
     }
 
 
     public async Task OnUpdated(Kubernetes kubeClient, CSharpApp item)
     {
-        if (item.Metadata == null || item.Spec == null)
+        if (item?.Metadata == null || item.Spec == null)
         {
             return;
         }
@@ -171,14 +173,15 @@ public class CSharpAppOperator : IOperationHandler<CSharpApp>
     }
     
     
-    public async Task OnBookmarked(Kubernetes k8s, CSharpApp crd)
+    public Task OnBookmarked(Kubernetes k8s, CSharpApp crd)
     {
-        
+        return Task.CompletedTask;
     }
 
-    public async Task OnError(Kubernetes k8s, CSharpApp crd)
+    public Task OnError(Kubernetes k8s, CSharpApp crd)
     {
         Console.Error.WriteLine("Some error happens...");
+        return Task.CompletedTask;
     }
     
 
@@ -429,7 +432,7 @@ public class CSharpAppOperator : IOperationHandler<CSharpApp>
 
         svc.Metadata.Name = item.Metadata.Name;
         svc.Metadata.Labels["csharpapp"] = item.Metadata.Name;
-        svc.Spec.Type = item.Spec.Service!.Type;
+        svc.Spec.Type = item.Spec!.Service!.Type;
         svc.Spec.Ports.Add(new V1ServicePort()
         {
             Port = item.Spec.Service.Port,
@@ -453,7 +456,7 @@ public class CSharpAppOperator : IOperationHandler<CSharpApp>
         }
     }
 
-    private void CleanupPods(Kubernetes kubeClient, CSharpApp item, string lastCodeHash)
+    private void CleanupPods(Kubernetes kubeClient, CSharpApp item, string? lastCodeHash)
     {
         var pods = FindPods(kubeClient, item, lastCodeHash).ToArray();
 

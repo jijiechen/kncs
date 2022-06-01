@@ -16,7 +16,7 @@ namespace Kncs.CrdController.OperatorSDK;
         public Kubernetes Kubernetes { get; private set; }
         private readonly IOperationHandler<T> m_handler;
         private readonly T m_crd;
-        private Watcher<T> m_watcher = null;
+        private Watcher<T>? m_watcher = null;
         private string m_k8sNamespace;
 
         static Controller()
@@ -94,7 +94,7 @@ namespace Kncs.CrdController.OperatorSDK;
 
         private void StartWatcher()
         {
-            Task<HttpOperationResponse<object>> listResponse = null;
+            Task<HttpOperationResponse<object>>? listResponse = null;
             DisposeWatcher();
 
             listResponse = Kubernetes.ListNamespacedCustomObjectWithHttpMessagesAsync(m_crd.Group, m_crd.Version, m_k8sNamespace, m_crd.Plural, watch: true);
@@ -167,8 +167,8 @@ namespace Kncs.CrdController.OperatorSDK;
         {
             if (exception is TaskCanceledException)
             {
-                TaskCanceledException tcex = exception as TaskCanceledException;
-                if (tcex.InnerException != null && tcex.InnerException is TimeoutException)
+                TaskCanceledException? tcex = exception as TaskCanceledException;
+                if (tcex?.InnerException != null && tcex.InnerException is TimeoutException)
                 {
                     DisposeWatcher();
                     return;

@@ -32,7 +32,7 @@ public class CSharpAppService
             return false;
         }
 
-        return this.Port == item.Port && (bool)(this.Type?.Equals(item.Type));
+        return this.Port == item.Port && (bool)(this.Type!.Equals(item.Type));
     }
 
     // ReSharper disable NonReadonlyMemberInGetHashCode
@@ -92,14 +92,16 @@ public class CSharpApp:  BaseCRD
   public class CSharpAppList :  IKubernetesObject<V1ListMeta>, IItems<CSharpApp>
   {
     [JsonProperty(PropertyName="apiVersion")]
-    public string ApiVersion { get; set; }
+    public string? ApiVersion { get; set; }
 
     [JsonProperty(PropertyName="items")]
-    public IList<CSharpApp> Items { get; set; }
+    public IList<CSharpApp>? Items { get; set; }
 
     [JsonProperty(PropertyName="kind")]
-    public string Kind { get; set; }
+    public string? Kind { get; set; }
 
     [JsonProperty(PropertyName="metadata")]
+#pragma warning disable CS8618
     public V1ListMeta Metadata { get; set; }
+#pragma warning restore CS8618
   }

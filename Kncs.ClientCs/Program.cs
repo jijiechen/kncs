@@ -47,7 +47,7 @@ public class Program
                     return;
                 }
                 
-                Console.WriteLine($"监视到事件 '{type}'，相关 Pod: {item.Metadata.Name}");
+                Console.WriteLine($"监视到事件 '{type}'，相关 Pod: {item!.Metadata.Name}");
             },
             error =>
             {
